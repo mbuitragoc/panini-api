@@ -38,7 +38,7 @@ func NewRouter(a *app.App) http.Handler {
 	tradesRepo := trades.NewRepo(a.DB)
 
 	// Domain services.
-	authSvc := auth.NewService(authRepo, a.Config.JWTSecret)
+	authSvc := auth.NewService(authRepo, a.Config.JWTSecret, a.Config.AppleClientID)
 	collectionsSvc := collections.NewService(collectionsRepo)
 	friendsSvc := friends.NewService(friendsRepo)
 	tradesSvc := trades.NewService(tradesRepo)

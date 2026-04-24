@@ -12,25 +12,28 @@ import (
 type Service struct {
 	repo      *Repo
 	jwtSecret []byte
+	apple     *appleValidator
 }
 
 // NewService creates a new auth Service.
-func NewService(repo *Repo, jwtSecret string) *Service {
+func NewService(repo *Repo, jwtSecret, appleBundleID string) *Service {
 	return &Service{
 		repo:      repo,
 		jwtSecret: []byte(jwtSecret),
+		apple:     newAppleValidator(appleBundleID),
 	}
 }
 
 // AuthenticateApple validates the Apple identity token, upserts the user, and issues a JWT.
-// Apple token validation is stubbed: only verifies the token is non-empty.
 func (s *Service) AuthenticateApple(ctx context.Context, req AppleTokenRequest) (*AuthResponse, error) {
 	if req.IdentityToken == "" {
 		return nil, fmt.Errorf("auth: identity token must not be empty")
 	}
 
-	// Stub: extract appleSub from the token — use the token itself as the subject for now.
-	appleSub := req.IdentityToken
+	appleSub, err := s.apple.ValidateToken(ctx, req.IdentityToken)
+	if err != nil {
+		return nil, fmt.Errorf("auth: invalid apple token: %w", err)
+	}
 
 	existing, err := s.repo.GetByAppleSub(ctx, appleSub)
 	if err != nil {
@@ -54,10 +57,14 @@ func (s *Service) AuthenticateApple(ctx context.Context, req AppleTokenRequest) 
 		return nil, fmt.Errorf("auth: issue jwt: %w", err)
 	}
 
-	return &AuthResponse{JWT: token, IsNewUser: isNewUser}, nil
+	return &AuthResponse{
+		JWT:       token,
+		IsNewUser: isNewUser,
+		UserID:    user.ID.String(),
+	}, nil
 }
 
-// issueJWT creates a signed JWT for the given user.
+// issueJWT creates a signed JWT for the given user valid for 90 days.
 func (s *Service) issueJWT(user *User) (string, error) {
 	claims := jwt.MapClaims{
 		"sub": user.ID.String(),

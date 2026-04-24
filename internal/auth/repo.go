@@ -2,7 +2,9 @@ package auth
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -19,26 +21,76 @@ func NewRepo(db *pgxpool.Pool) *Repo {
 // GetByAppleSub retrieves a user by their Apple subject identifier.
 // Returns nil, nil when no user is found.
 func (r *Repo) GetByAppleSub(ctx context.Context, appleSub string) (*User, error) {
-	return nil, nil
+	const q = `
+		SELECT id, apple_sub, COALESCE(username, ''), COALESCE(handle, ''), created_at
+		FROM users WHERE apple_sub = $1`
+
+	var u User
+	err := r.db.QueryRow(ctx, q, appleSub).
+		Scan(&u.ID, &u.AppleSub, &u.Username, &u.Handle, &u.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
 }
 
 // Create inserts a new user record and returns the created user.
 func (r *Repo) Create(ctx context.Context, appleSub string) (*User, error) {
-	return nil, nil
+	const q = `
+		INSERT INTO users (apple_sub)
+		VALUES ($1)
+		RETURNING id, apple_sub, COALESCE(username, ''), COALESCE(handle, ''), created_at`
+
+	var u User
+	err := r.db.QueryRow(ctx, q, appleSub).
+		Scan(&u.ID, &u.AppleSub, &u.Username, &u.Handle, &u.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
 }
 
 // UpsertProfile updates username and handle for an existing user.
 func (r *Repo) UpsertProfile(ctx context.Context, userID, username, handle string) (*User, error) {
-	return nil, nil
+	const q = `
+		UPDATE users SET username = $1, handle = $2
+		WHERE id = $3
+		RETURNING id, apple_sub, COALESCE(username, ''), COALESCE(handle, ''), created_at`
+
+	var u User
+	err := r.db.QueryRow(ctx, q, username, handle, userID).
+		Scan(&u.ID, &u.AppleSub, &u.Username, &u.Handle, &u.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
 }
 
 // GetByID retrieves a user by primary key.
 // Returns nil, nil when no user is found.
 func (r *Repo) GetByID(ctx context.Context, userID string) (*User, error) {
-	return nil, nil
+	const q = `
+		SELECT id, apple_sub, COALESCE(username, ''), COALESCE(handle, ''), created_at
+		FROM users WHERE id = $1`
+
+	var u User
+	err := r.db.QueryRow(ctx, q, userID).
+		Scan(&u.ID, &u.AppleSub, &u.Username, &u.Handle, &u.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
 }
 
 // SaveDeviceToken persists an APNs device token for the given user.
 func (r *Repo) SaveDeviceToken(ctx context.Context, userID, deviceToken string) error {
-	return nil
+	const q = `UPDATE users SET device_token = $2 WHERE id = $1`
+	_, err := r.db.Exec(ctx, q, userID, deviceToken)
+	return err
 }

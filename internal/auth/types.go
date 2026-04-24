@@ -17,6 +17,7 @@ type AppleTokenRequest struct {
 type AuthResponse struct {
 	JWT       string `json:"jwt"`
 	IsNewUser bool   `json:"isNewUser"`
+	UserID    string `json:"userID"`
 }
 
 // User represents an authenticated application user.
