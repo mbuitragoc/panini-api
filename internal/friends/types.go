@@ -33,6 +33,7 @@ type FriendSyncRecord struct {
 	FriendHandle     string           `json:"friendHandle"`
 	FriendOwnedCount int              `json:"friendOwnedCount"`
 	Status           FriendshipStatus `json:"status"`
+	SentByMe         bool             `json:"sentByMe"`
 	UpdatedAt        time.Time        `json:"updatedAt"`
 }
 

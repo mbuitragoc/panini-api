@@ -64,6 +64,11 @@ func (s *Service) AuthenticateApple(ctx context.Context, req AppleTokenRequest) 
 	}, nil
 }
 
+// SearchByHandle returns users whose handle matches the given substring.
+func (s *Service) SearchByHandle(ctx context.Context, handle string) ([]User, error) {
+	return s.repo.SearchByHandle(ctx, handle)
+}
+
 // issueJWT creates a signed JWT for the given user valid for 90 days.
 func (s *Service) issueJWT(user *User) (string, error) {
 	claims := jwt.MapClaims{

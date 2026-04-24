@@ -66,6 +66,7 @@ func NewRouter(a *app.App) http.Handler {
 		r.Post("/v1/users/me", authH.PostUsersMe)
 		r.Get("/v1/users/me", authH.GetUsersMe)
 		r.Post("/v1/users/me/device-token", authH.PostDeviceToken)
+		r.Get("/v1/users/search", authH.GetUsersSearch)
 
 		// Bulk sync.
 		r.Get("/v1/sync", syncH.GetSync)

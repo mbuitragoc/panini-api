@@ -20,25 +20,43 @@ func NewRepo(db *pgxpool.Pool) *Repo {
 
 // ListFriends returns friendship records enriched with friend profile data,
 // optionally filtered to rows updated after since.
+// It returns both outgoing records (sentByMe=true) and incoming pending requests (sentByMe=false).
 func (r *Repo) ListFriends(ctx context.Context, userID string, since *time.Time) ([]FriendSyncRecord, error) {
-	query := `
-		SELECT f.friend_id,
-		       COALESCE(u.username, '') AS friend_username,
-		       COALESCE(u.handle, '')   AS friend_handle,
-		       (SELECT COUNT(*) FROM user_collections uc
-		        WHERE uc.user_id = f.friend_id AND uc.quantity_owned > 0) AS friend_owned_count,
-		       f.status,
-		       f.updated_at
-		FROM friendships f
-		JOIN users u ON u.id = f.friend_id
-		WHERE f.user_id = $1`
-
+	sinceFilter := ""
 	args := []any{userID}
 	if since != nil {
-		query += ` AND f.updated_at > $2`
+		sinceFilter = ` AND f.updated_at > $2`
 		args = append(args, *since)
 	}
-	query += ` ORDER BY f.updated_at DESC`
+
+	query := `
+		SELECT
+		    f.friend_id,
+		    COALESCE(u.username, '') AS friend_username,
+		    COALESCE(u.handle, '')   AS friend_handle,
+		    (SELECT COUNT(*) FROM user_collections uc WHERE uc.user_id = f.friend_id AND uc.quantity_owned > 0) AS friend_owned_count,
+		    f.status,
+		    TRUE AS sent_by_me,
+		    f.updated_at
+		FROM friendships f
+		JOIN users u ON u.id = f.friend_id
+		WHERE f.user_id = $1` + sinceFilter + `
+
+		UNION ALL
+
+		SELECT
+		    f.user_id,
+		    COALESCE(u.username, '') AS friend_username,
+		    COALESCE(u.handle, '')   AS friend_handle,
+		    (SELECT COUNT(*) FROM user_collections uc WHERE uc.user_id = f.user_id AND uc.quantity_owned > 0) AS friend_owned_count,
+		    f.status,
+		    FALSE AS sent_by_me,
+		    f.updated_at
+		FROM friendships f
+		JOIN users u ON u.id = f.user_id
+		WHERE f.friend_id = $1 AND f.status = 'pending'` + sinceFilter + `
+
+		ORDER BY updated_at DESC`
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
@@ -55,6 +73,7 @@ func (r *Repo) ListFriends(ctx context.Context, userID string, since *time.Time)
 			&f.FriendHandle,
 			&f.FriendOwnedCount,
 			&f.Status,
+			&f.SentByMe,
 			&f.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("friends: scan: %w", err)
@@ -64,14 +83,45 @@ func (r *Repo) ListFriends(ctx context.Context, userID string, since *time.Time)
 	return results, rows.Err()
 }
 
-// CreateRequest inserts a pending friend request.
+// CreateRequest inserts a pending friend request (sender's direction only).
 func (r *Repo) CreateRequest(ctx context.Context, userID, friendID string) (*Friendship, error) {
-	return nil, nil
+	const q = `
+		INSERT INTO friendships (user_id, friend_id, status)
+		VALUES ($1, $2, 'pending')
+		ON CONFLICT (user_id, friend_id) DO UPDATE SET status = 'pending', updated_at = now()
+		RETURNING user_id, friend_id, status, created_at, updated_at`
+	var f Friendship
+	err := r.db.QueryRow(ctx, q, userID, friendID).Scan(&f.UserID, &f.FriendID, &f.Status, &f.CreatedAt, &f.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("friends: create request: %w", err)
+	}
+	return &f, nil
 }
 
-// RespondToRequest updates the status of a friend request.
-func (r *Repo) RespondToRequest(ctx context.Context, requestID, recipientID string, accept bool) (*Friendship, error) {
-	return nil, nil
+// RespondToRequest updates the sender's outgoing record and, when accepted,
+// inserts the recipient's mirrored row so both sides see accepted status.
+func (r *Repo) RespondToRequest(ctx context.Context, senderID, recipientID string, accept bool) (*Friendship, error) {
+	newStatus := FriendshipStatus("declined")
+	if accept {
+		newStatus = StatusAccepted
+	}
+
+	const q1 = `UPDATE friendships SET status = $1, updated_at = now() WHERE user_id = $2 AND friend_id = $3`
+	if _, err := r.db.Exec(ctx, q1, newStatus, senderID, recipientID); err != nil {
+		return nil, fmt.Errorf("friends: respond: %w", err)
+	}
+
+	if accept {
+		const q2 = `
+			INSERT INTO friendships (user_id, friend_id, status)
+			VALUES ($1, $2, 'accepted')
+			ON CONFLICT (user_id, friend_id) DO UPDATE SET status = 'accepted', updated_at = now()`
+		if _, err := r.db.Exec(ctx, q2, recipientID, senderID); err != nil {
+			return nil, fmt.Errorf("friends: respond accept: %w", err)
+		}
+	}
+
+	return &Friendship{Status: newStatus}, nil
 }
 
 // GetFriendCollection returns collection entries for a user's friend.

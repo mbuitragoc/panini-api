@@ -94,3 +94,24 @@ func (r *Repo) SaveDeviceToken(ctx context.Context, userID, deviceToken string) 
 	_, err := r.db.Exec(ctx, q, userID, deviceToken)
 	return err
 }
+
+// SearchByHandle returns up to 20 users whose handle contains the given string (case-insensitive).
+func (r *Repo) SearchByHandle(ctx context.Context, handle string) ([]User, error) {
+	const q = `
+		SELECT id, apple_sub, COALESCE(username, ''), COALESCE(handle, ''), created_at
+		FROM users WHERE handle ILIKE $1 LIMIT 20`
+	rows, err := r.db.Query(ctx, q, "%"+handle+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.ID, &u.AppleSub, &u.Username, &u.Handle, &u.CreatedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}

@@ -80,6 +80,24 @@ func (h *Handlers) GetUsersMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, user)
 }
 
+// GetUsersSearch handles GET /v1/users/search?handle= — searches users by handle substring.
+func (h *Handlers) GetUsersSearch(w http.ResponseWriter, r *http.Request) {
+	handle := r.URL.Query().Get("handle")
+	if handle == "" {
+		writeError(w, http.StatusBadRequest, "handle query param required")
+		return
+	}
+	users, err := h.svc.SearchByHandle(r.Context(), handle)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if users == nil {
+		users = []User{}
+	}
+	writeJSON(w, http.StatusOK, users)
+}
+
 // PostDeviceToken handles POST /v1/users/me/device-token — stores an APNs device token.
 func (h *Handlers) PostDeviceToken(w http.ResponseWriter, r *http.Request) {
 	userID := httpmw.UserIDFromContext(r.Context())
