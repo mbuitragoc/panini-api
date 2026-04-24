@@ -13,6 +13,7 @@ import (
 	"github.com/mbuitragoc/panini-api/internal/collections"
 	"github.com/mbuitragoc/panini-api/internal/friends"
 	httpmw "github.com/mbuitragoc/panini-api/internal/http/middleware"
+	"github.com/mbuitragoc/panini-api/internal/notify"
 	"github.com/mbuitragoc/panini-api/internal/stickers"
 	appsync "github.com/mbuitragoc/panini-api/internal/sync"
 	"github.com/mbuitragoc/panini-api/internal/trades"
@@ -37,11 +38,14 @@ func NewRouter(a *app.App) http.Handler {
 	friendsRepo := friends.NewRepo(a.DB)
 	tradesRepo := trades.NewRepo(a.DB)
 
+	// Notification service (APNs credentials stubbed).
+	notifySvc := notify.NewService("", "", "", "com.mbuitragoc.panini")
+
 	// Domain services.
 	authSvc := auth.NewService(authRepo, a.Config.JWTSecret, a.Config.AppleClientID)
 	collectionsSvc := collections.NewService(collectionsRepo)
-	friendsSvc := friends.NewService(friendsRepo)
-	tradesSvc := trades.NewService(tradesRepo)
+	friendsSvc := friends.NewService(friendsRepo, notifySvc, authRepo)
+	tradesSvc := trades.NewService(tradesRepo, notifySvc, authRepo)
 	syncSvc := appsync.NewService(collectionsRepo, tradesRepo, friendsRepo)
 
 	// Domain handlers.

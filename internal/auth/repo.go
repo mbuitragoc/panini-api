@@ -95,6 +95,21 @@ func (r *Repo) SaveDeviceToken(ctx context.Context, userID, deviceToken string) 
 	return err
 }
 
+// GetDeviceToken retrieves the APNs device token for the given user.
+// Returns "", nil when no token is stored or the user is not found.
+func (r *Repo) GetDeviceToken(ctx context.Context, userID string) (string, error) {
+	const q = `SELECT COALESCE(device_token, '') FROM users WHERE id = $1`
+	var token string
+	err := r.db.QueryRow(ctx, q, userID).Scan(&token)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
 // SearchByHandle returns up to 20 users whose handle contains the given string (case-insensitive).
 func (r *Repo) SearchByHandle(ctx context.Context, handle string) ([]User, error) {
 	const q = `
