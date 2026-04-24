@@ -19,7 +19,7 @@ func NewService(repo *Repo) *Service {
 
 // ListForUser returns all trades involving the given user.
 func (s *Service) ListForUser(ctx context.Context, userID string) ([]Trade, error) {
-	trades, err := s.repo.ListForUser(ctx, userID)
+	trades, err := s.repo.ListForUser(ctx, userID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("trades: list for user: %w", err)
 	}

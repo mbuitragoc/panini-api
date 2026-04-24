@@ -17,7 +17,7 @@ func NewService(repo *Repo) *Service {
 
 // ListForUser returns all collection entries belonging to a user.
 func (s *Service) ListForUser(ctx context.Context, userID string) ([]UserCollection, error) {
-	items, err := s.repo.ListByUser(ctx, userID)
+	items, err := s.repo.ListByUser(ctx, userID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("collections: list for user: %w", err)
 	}

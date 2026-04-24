@@ -2,6 +2,8 @@ package trades
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -16,9 +18,47 @@ func NewRepo(db *pgxpool.Pool) *Repo {
 	return &Repo{db: db}
 }
 
-// ListForUser returns all trades where the user is proposer or recipient.
-func (r *Repo) ListForUser(ctx context.Context, userID string) ([]Trade, error) {
-	return nil, nil
+// ListForUser returns trades where the user is proposer or recipient, optionally filtered by since.
+func (r *Repo) ListForUser(ctx context.Context, userID string, since *time.Time) ([]Trade, error) {
+	query := `
+		SELECT id, proposer_id, recipient_id, status, offered_stickers, requested_stickers,
+		       proposed_at, resolved_at, completed_at, updated_at
+		FROM trades
+		WHERE proposer_id = $1 OR recipient_id = $1`
+
+	args := []any{userID}
+	if since != nil {
+		query += ` AND updated_at > $2`
+		args = append(args, *since)
+	}
+	query += ` ORDER BY proposed_at DESC`
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("trades: list for user: %w", err)
+	}
+	defer rows.Close()
+
+	var results []Trade
+	for rows.Next() {
+		var t Trade
+		if err := rows.Scan(
+			&t.ID,
+			&t.ProposerID,
+			&t.RecipientID,
+			&t.Status,
+			&t.OfferedStickers,
+			&t.RequestedStickers,
+			&t.ProposedAt,
+			&t.ResolvedAt,
+			&t.CompletedAt,
+			&t.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("trades: scan: %w", err)
+		}
+		results = append(results, t)
+	}
+	return results, rows.Err()
 }
 
 // GetByID retrieves a single trade by primary key.

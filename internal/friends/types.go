@@ -25,6 +25,17 @@ type Friendship struct {
 	UpdatedAt time.Time        `json:"updatedAt"`
 }
 
+// FriendSyncRecord is a friendship enriched with the friend's profile and collection count.
+// Returned by the sync endpoint so clients populate Friendship models in one round-trip.
+type FriendSyncRecord struct {
+	FriendID         uuid.UUID        `json:"friendId"`
+	FriendUsername   string           `json:"friendUsername"`
+	FriendHandle     string           `json:"friendHandle"`
+	FriendOwnedCount int              `json:"friendOwnedCount"`
+	Status           FriendshipStatus `json:"status"`
+	UpdatedAt        time.Time        `json:"updatedAt"`
+}
+
 // SendFriendRequestRequest is the payload for initiating a friend request.
 type SendFriendRequestRequest struct {
 	FriendID uuid.UUID `json:"friendId"`

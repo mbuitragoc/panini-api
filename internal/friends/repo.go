@@ -2,6 +2,8 @@ package friends
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -16,9 +18,50 @@ func NewRepo(db *pgxpool.Pool) *Repo {
 	return &Repo{db: db}
 }
 
-// ListFriends returns accepted friendships for the given user.
-func (r *Repo) ListFriends(ctx context.Context, userID string) ([]Friendship, error) {
-	return nil, nil
+// ListFriends returns friendship records enriched with friend profile data,
+// optionally filtered to rows updated after since.
+func (r *Repo) ListFriends(ctx context.Context, userID string, since *time.Time) ([]FriendSyncRecord, error) {
+	query := `
+		SELECT f.friend_id,
+		       COALESCE(u.username, '') AS friend_username,
+		       COALESCE(u.handle, '')   AS friend_handle,
+		       (SELECT COUNT(*) FROM user_collections uc
+		        WHERE uc.user_id = f.friend_id AND uc.quantity_owned > 0) AS friend_owned_count,
+		       f.status,
+		       f.updated_at
+		FROM friendships f
+		JOIN users u ON u.id = f.friend_id
+		WHERE f.user_id = $1`
+
+	args := []any{userID}
+	if since != nil {
+		query += ` AND f.updated_at > $2`
+		args = append(args, *since)
+	}
+	query += ` ORDER BY f.updated_at DESC`
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("friends: list: %w", err)
+	}
+	defer rows.Close()
+
+	var results []FriendSyncRecord
+	for rows.Next() {
+		var f FriendSyncRecord
+		if err := rows.Scan(
+			&f.FriendID,
+			&f.FriendUsername,
+			&f.FriendHandle,
+			&f.FriendOwnedCount,
+			&f.Status,
+			&f.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("friends: scan: %w", err)
+		}
+		results = append(results, f)
+	}
+	return results, rows.Err()
 }
 
 // CreateRequest inserts a pending friend request.

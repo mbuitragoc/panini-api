@@ -3,6 +3,7 @@ package sync
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	httpmw "github.com/mbuitragoc/panini-api/internal/http/middleware"
 )
@@ -17,7 +18,7 @@ func NewHandlers(svc *Service) *Handlers {
 	return &Handlers{svc: svc}
 }
 
-// GetSync handles GET /v1/sync.
+// GetSync handles GET /v1/sync?since=<RFC3339>.
 func (h *Handlers) GetSync(w http.ResponseWriter, r *http.Request) {
 	userID := httpmw.UserIDFromContext(r.Context())
 	if userID == "" {
@@ -25,7 +26,17 @@ func (h *Handlers) GetSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.svc.Sync(r.Context(), userID)
+	var since *time.Time
+	if sinceStr := r.URL.Query().Get("since"); sinceStr != "" {
+		t, err := time.Parse(time.RFC3339, sinceStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid since parameter: expected RFC3339")
+			return
+		}
+		since = &t
+	}
+
+	resp, err := h.svc.Sync(r.Context(), userID, since)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return

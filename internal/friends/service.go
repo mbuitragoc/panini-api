@@ -16,8 +16,8 @@ func NewService(repo *Repo) *Service {
 }
 
 // ListFriends returns all accepted friends for a user.
-func (s *Service) ListFriends(ctx context.Context, userID string) ([]Friendship, error) {
-	friends, err := s.repo.ListFriends(ctx, userID)
+func (s *Service) ListFriends(ctx context.Context, userID string) ([]FriendSyncRecord, error) {
+	friends, err := s.repo.ListFriends(ctx, userID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("friends: list: %w", err)
 	}

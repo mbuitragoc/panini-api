@@ -13,6 +13,6 @@ import (
 type SyncResponse struct {
 	Collections []collections.UserCollection `json:"collections"`
 	Trades      []trades.Trade               `json:"trades"`
-	Friendships []friends.Friendship         `json:"friendships"`
+	Friendships []friends.FriendSyncRecord   `json:"friendships"`
 	SyncedAt    time.Time                    `json:"syncedAt"`
 }

@@ -31,18 +31,19 @@ func NewService(
 }
 
 // Sync fetches all relevant data for a user and returns it as a single SyncResponse.
-func (s *Service) Sync(ctx context.Context, userID string) (*SyncResponse, error) {
-	userCollections, err := s.collectionsRepo.ListByUser(ctx, userID)
+// When since is non-nil only records updated after that timestamp are included.
+func (s *Service) Sync(ctx context.Context, userID string, since *time.Time) (*SyncResponse, error) {
+	userCollections, err := s.collectionsRepo.ListByUser(ctx, userID, since)
 	if err != nil {
 		return nil, fmt.Errorf("sync: collections: %w", err)
 	}
 
-	userTrades, err := s.tradesRepo.ListForUser(ctx, userID)
+	userTrades, err := s.tradesRepo.ListForUser(ctx, userID, since)
 	if err != nil {
 		return nil, fmt.Errorf("sync: trades: %w", err)
 	}
 
-	userFriendships, err := s.friendsRepo.ListFriends(ctx, userID)
+	userFriendships, err := s.friendsRepo.ListFriends(ctx, userID, since)
 	if err != nil {
 		return nil, fmt.Errorf("sync: friendships: %w", err)
 	}
@@ -56,7 +57,7 @@ func (s *Service) Sync(ctx context.Context, userID string) (*SyncResponse, error
 	}
 
 	if userFriendships == nil {
-		userFriendships = []friends.Friendship{}
+		userFriendships = []friends.FriendSyncRecord{}
 	}
 
 	return &SyncResponse{
