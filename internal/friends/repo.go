@@ -125,6 +125,40 @@ func (r *Repo) RespondToRequest(ctx context.Context, senderID, recipientID strin
 }
 
 // GetFriendCollection returns collection entries for a user's friend.
-func (r *Repo) GetFriendCollection(ctx context.Context, ownerUserID, friendID string) ([]interface{}, error) {
-	return nil, nil
+// It first verifies an accepted friendship exists between requesterID and friendID.
+func (r *Repo) GetFriendCollection(ctx context.Context, requesterID, friendID string) ([]FriendCollectionItem, error) {
+	const checkQ = `
+        SELECT COUNT(*) FROM friendships
+        WHERE user_id = $1 AND friend_id = $2 AND status = 'accepted'`
+	var count int
+	if err := r.db.QueryRow(ctx, checkQ, requesterID, friendID).Scan(&count); err != nil {
+		return nil, fmt.Errorf("friends: collection: check friendship: %w", err)
+	}
+	if count == 0 {
+		return nil, fmt.Errorf("friends: collection: not friends")
+	}
+
+	const q = `
+        SELECT sticker_id, quantity_owned, wishlisted, blacklisted
+        FROM user_collections
+        WHERE user_id = $1 AND quantity_owned > 0
+        ORDER BY sticker_id`
+	rows, err := r.db.Query(ctx, q, friendID)
+	if err != nil {
+		return nil, fmt.Errorf("friends: collection: query: %w", err)
+	}
+	defer rows.Close()
+
+	var items []FriendCollectionItem
+	for rows.Next() {
+		var item FriendCollectionItem
+		if err := rows.Scan(&item.StickerID, &item.QuantityOwned, &item.Wishlisted, &item.Blacklisted); err != nil {
+			return nil, fmt.Errorf("friends: collection: scan: %w", err)
+		}
+		items = append(items, item)
+	}
+	if items == nil {
+		items = []FriendCollectionItem{}
+	}
+	return items, rows.Err()
 }

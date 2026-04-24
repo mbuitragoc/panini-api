@@ -46,3 +46,11 @@ type SendFriendRequestRequest struct {
 type RespondFriendRequestRequest struct {
 	Accept bool `json:"accept"`
 }
+
+// FriendCollectionItem is a single sticker entry from a friend's collection.
+type FriendCollectionItem struct {
+	StickerID     string `json:"stickerID"`
+	QuantityOwned int    `json:"quantityOwned"`
+	Wishlisted    bool   `json:"wishlisted"`
+	Blacklisted   bool   `json:"blacklisted"`
+}

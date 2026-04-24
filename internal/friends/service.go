@@ -35,6 +35,11 @@ func (s *Service) SendRequest(ctx context.Context, userID, friendID string) (*Fr
 	return f, nil
 }
 
+// GetFriendCollection returns the sticker collection for a friend of the requester.
+func (s *Service) GetFriendCollection(ctx context.Context, requesterID, friendID string) ([]FriendCollectionItem, error) {
+	return s.repo.GetFriendCollection(ctx, requesterID, friendID)
+}
+
 // RespondToRequest accepts or declines an incoming friend request.
 func (s *Service) RespondToRequest(ctx context.Context, requestID, recipientID string, accept bool) (*Friendship, error) {
 	f, err := s.repo.RespondToRequest(ctx, requestID, recipientID, accept)

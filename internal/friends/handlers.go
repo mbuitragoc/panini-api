@@ -3,6 +3,7 @@ package friends
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	httpmw "github.com/mbuitragoc/panini-api/internal/http/middleware"
@@ -89,8 +90,29 @@ func (h *Handlers) PutFriendRequest(w http.ResponseWriter, r *http.Request) {
 
 // GetFriendCollection handles GET /v1/friends/{id}/collection.
 func (h *Handlers) GetFriendCollection(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": "not implemented"})
+	userID := httpmw.UserIDFromContext(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	friendID := chi.URLParam(r, "id")
+	if friendID == "" {
+		writeError(w, http.StatusBadRequest, "id is required")
+		return
+	}
+
+	items, err := h.svc.GetFriendCollection(r.Context(), userID, friendID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not friends") {
+			writeError(w, http.StatusForbidden, "not friends")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, items)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
