@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/mbuitragoc/panini-api/internal/admin"
 	"github.com/mbuitragoc/panini-api/internal/app"
 	"github.com/mbuitragoc/panini-api/internal/auth"
 	"github.com/mbuitragoc/panini-api/internal/collections"
@@ -32,6 +33,7 @@ func NewRouter(a *app.App) http.Handler {
 	r.Use(chimw.Logger)
 
 	// Domain repositories.
+	adminRepo := admin.NewRepo(a.DB)
 	authRepo := auth.NewRepo(a.DB)
 	stickersRepo := stickers.NewRepo(a.DB)
 	collectionsRepo := collections.NewRepo(a.DB)
@@ -54,6 +56,9 @@ func NewRouter(a *app.App) http.Handler {
 	friendsH := friends.NewHandlers(friendsSvc)
 	tradesH := trades.NewHandlers(tradesSvc)
 	syncH := appsync.NewHandlers(syncSvc)
+
+	// Admin handlers.
+	adminH := admin.NewHandlers(adminRepo)
 
 	// Sticker handlers (read-only catalog, no dedicated service layer needed).
 	stickersH := stickers.NewHandlers(stickersRepo)
@@ -95,6 +100,9 @@ func NewRouter(a *app.App) http.Handler {
 		r.Put("/v1/trades/{id}/accept", tradesH.PutTradeAccept)
 		r.Put("/v1/trades/{id}/decline", tradesH.PutTradeDecline)
 		r.Put("/v1/trades/{id}/confirm", tradesH.PutTradeConfirm)
+
+		// Admin.
+		r.Post("/v1/admin/missing-ratings", adminH.PostMissingRatings)
 	})
 
 	return r
