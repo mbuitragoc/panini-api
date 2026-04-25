@@ -63,6 +63,9 @@ func (r *Repo) UpsertProfile(ctx context.Context, userID, username, handle strin
 	var u User
 	err := r.db.QueryRow(ctx, q, username, handle, userID).
 		Scan(&u.ID, &u.AppleSub, &u.Username, &u.Handle, &u.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}

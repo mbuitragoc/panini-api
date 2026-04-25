@@ -2,8 +2,11 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	httpmw "github.com/mbuitragoc/panini-api/internal/http/middleware"
 )
 
@@ -51,7 +54,17 @@ func (h *Handlers) PostUsersMe(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.svc.repo.UpsertProfile(r.Context(), userID, req.Username, req.Handle)
 	if err != nil {
+		slog.Error("upsert profile", "userID", userID, "error", err)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			writeError(w, http.StatusConflict, "username or handle already taken")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if user == nil {
+		writeError(w, http.StatusNotFound, "user not found — please sign in again")
 		return
 	}
 
