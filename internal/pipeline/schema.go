@@ -53,6 +53,7 @@ func EnsureSchema(db *sql.DB) error {
 			normalized_overall  INTEGER,
 			confederation       TEXT,
 			rank_change         INTEGER,
+			wc_qualified        INTEGER NOT NULL DEFAULT 0,
 			last_updated        TEXT
 		)`,
 		`CREATE TABLE IF NOT EXISTS sticker_player_link (
@@ -80,6 +81,20 @@ func EnsureSchema(db *sql.DB) error {
 	for _, stmt := range stmts {
 		if _, err := db.Exec(stmt); err != nil {
 			return fmt.Errorf("create schema: %w", err)
+		}
+	}
+	return nil
+}
+
+// MigrateTeamRatingsTable adds wc_qualified to team_ratings if it doesn't exist.
+func MigrateTeamRatingsTable(db *sql.DB) error {
+	existing, err := tableColumns(db, "team_ratings")
+	if err != nil {
+		return fmt.Errorf("read team_ratings columns: %w", err)
+	}
+	if !existing["wc_qualified"] {
+		if _, err := db.Exec("ALTER TABLE team_ratings ADD COLUMN wc_qualified INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return fmt.Errorf("alter team_ratings add wc_qualified: %w", err)
 		}
 	}
 	return nil

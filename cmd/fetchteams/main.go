@@ -89,6 +89,9 @@ func main() {
 	if err := pipeline.EnsureSchema(db); err != nil {
 		log.Fatalf("schema: %v", err)
 	}
+	if err := pipeline.MigrateTeamRatingsTable(db); err != nil {
+		log.Fatalf("migrate team_ratings: %v", err)
+	}
 
 	if err := writeTeams(db, teams); err != nil {
 		log.Fatalf("write teams: %v", err)
@@ -407,6 +410,27 @@ func parseFIFARankings(data []byte) ([]fifaEntry, error) {
 
 // ── Shared normalize / write ──────────────────────────────────────────────────
 
+// wc2026 is the set of FIFA country codes that qualified for the 2026 World Cup.
+// Source: confirmed list as of April 2026 (48 teams).
+var wc2026 = map[string]bool{
+	// AFC (9)
+	"AUS": true, "IRN": true, "IRQ": true, "JPN": true, "JOR": true,
+	"QAT": true, "KSA": true, "KOR": true, "UZB": true,
+	// CAF (10)
+	"ALG": true, "CPV": true, "COD": true, "EGY": true, "GHA": true,
+	"CIV": true, "MAR": true, "SEN": true, "RSA": true, "TUN": true,
+	// CONCACAF (6)
+	"CAN": true, "CUW": true, "HAI": true, "MEX": true, "PAN": true, "USA": true,
+	// CONMEBOL (6)
+	"ARG": true, "BRA": true, "COL": true, "ECU": true, "PAR": true, "URU": true,
+	// OFC (1)
+	"NZL": true,
+	// UEFA (16)
+	"AUT": true, "BEL": true, "BIH": true, "CRO": true, "CZE": true,
+	"ENG": true, "FRA": true, "GER": true, "NED": true, "NOR": true,
+	"POR": true, "SCO": true, "ESP": true, "SWE": true, "SUI": true, "TUR": true,
+}
+
 // teamRecord is the normalized output ready for insertion.
 type teamRecord struct {
 	CountryCode       string
@@ -416,6 +440,7 @@ type teamRecord struct {
 	NormalizedOverall int
 	Confederation     string
 	RankChange        int
+	WCQualified       bool
 }
 
 func normalize(entries []fifaEntry) []teamRecord {
@@ -453,6 +478,7 @@ func normalize(entries []fifaEntry) []teamRecord {
 			NormalizedOverall: ovr,
 			Confederation:     e.Confederation,
 			RankChange:        e.PreviousRank - e.Rank,
+			WCQualified:       wc2026[code],
 		})
 	}
 	return out
@@ -467,17 +493,21 @@ func writeTeams(db *sql.DB, teams []teamRecord) error {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	for _, t := range teams {
+		wcQ := 0
+		if t.WCQualified {
+			wcQ = 1
+		}
 		_, err := tx.Exec(`
 			INSERT INTO team_ratings
-				(country_code, name, fifa_rank, fifa_points, normalized_overall, confederation, rank_change, last_updated)
-			VALUES (?,?,?,?,?,?,?,?)
+				(country_code, name, fifa_rank, fifa_points, normalized_overall, confederation, rank_change, wc_qualified, last_updated)
+			VALUES (?,?,?,?,?,?,?,?,?)
 			ON CONFLICT (country_code) DO UPDATE SET
 				name=excluded.name, fifa_rank=excluded.fifa_rank,
 				fifa_points=excluded.fifa_points, normalized_overall=excluded.normalized_overall,
 				confederation=excluded.confederation, rank_change=excluded.rank_change,
-				last_updated=excluded.last_updated`,
+				wc_qualified=excluded.wc_qualified, last_updated=excluded.last_updated`,
 			t.CountryCode, t.Name, t.FIFARank, t.FIFAPoints,
-			t.NormalizedOverall, t.Confederation, t.RankChange, now,
+			t.NormalizedOverall, t.Confederation, t.RankChange, wcQ, now,
 		)
 		if err != nil {
 			return fmt.Errorf("upsert team %s: %w", t.CountryCode, err)
@@ -488,8 +518,8 @@ func writeTeams(db *sql.DB, teams []teamRecord) error {
 }
 
 func printTeams(teams []teamRecord) {
-	fmt.Printf("\n%-4s %-30s %4s %8s %3s %4s %s\n", "Code", "Name", "Rank", "Points", "OVR", "Δ", "Confederation")
-	fmt.Println(strings.Repeat("─", 72))
+	fmt.Printf("\n%-4s %-30s %4s %8s %3s %4s %-3s %s\n", "Code", "Name", "Rank", "Points", "OVR", "Δ", "WC", "Confederation")
+	fmt.Println(strings.Repeat("─", 76))
 	for _, t := range teams {
 		delta := ""
 		if t.RankChange > 0 {
@@ -497,9 +527,13 @@ func printTeams(teams []teamRecord) {
 		} else if t.RankChange < 0 {
 			delta = fmt.Sprintf("↓%d", -t.RankChange)
 		}
-		fmt.Printf("%-4s %-30s %4d %8.1f %3d %4s %s\n",
+		wc := ""
+		if t.WCQualified {
+			wc = "✓"
+		}
+		fmt.Printf("%-4s %-30s %4d %8.1f %3d %4s %-3s %s\n",
 			t.CountryCode, t.Name, t.FIFARank, t.FIFAPoints,
-			t.NormalizedOverall, delta, t.Confederation)
+			t.NormalizedOverall, delta, wc, t.Confederation)
 	}
 }
 
