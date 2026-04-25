@@ -145,11 +145,12 @@ func Match(stickers []StickerRecord, players []FC26Player, overrides map[string]
 }
 
 // ComputeRarity maps an overall rating to a rarity tier.
+// Thresholds: legendary ≥89, gold 82–88, silver 75–81, bronze <75.
 func ComputeRarity(overall int) string {
 	switch {
-	case overall >= 88:
+	case overall >= 89:
 		return "legendary"
-	case overall >= 83:
+	case overall >= 82:
 		return "gold"
 	case overall >= 75:
 		return "silver"
